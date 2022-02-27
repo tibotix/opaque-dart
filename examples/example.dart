@@ -1,7 +1,7 @@
 import 'package:opaque/opaque.dart';
 import 'dart:typed_data';
 import 'dart:ffi' as ffi;
-import 'dart:io' show Directory;
+import 'dart:io' show Directory, stdout, stdin;
 
 var library_path = Directory.current.path + "\\libopaque.dll";
 var sodium_library_path = Directory.current.path + "\\libsodium.dll";
@@ -9,15 +9,88 @@ var sodium_library_path = Directory.current.path + "\\libsodium.dll";
 final opaquelib = ffi.DynamicLibrary.open(library_path);
 final sodiumlib = ffi.DynamicLibrary.open(sodium_library_path);
 
+final Uint8List context = Uint8List.fromList("opaque-dart-v0.0.1".codeUnits);
+
+final opaque = Opaque.init(opaquelib, sodiumlib);
+
+OpaqueIds make_ids(Uint8List username) {
+  return OpaqueIds(username, Uint8List.fromList("idS".codeUnits));
+}
+
+Map<String, Uint8List> register(Uint8List username, Uint8List pwd) {
+  final ids = make_ids(username);
+  var res = opaque.CreateRegistrationRequest(pwd);
+  final request = res["request"]!;
+  final secU = res["sec"]!;
+
+  res = opaque.CreateRegistrationResponse(request);
+  final secS = res["sec"]!;
+  final pub = res["pub"]!;
+
+  res = opaque.FinalizeRequest(secU, pub, ids);
+  final reg_rec = res["reg_rec"]!;
+  final export_key = res["export_key"]!;
+
+  res = opaque.StoreUserRecord(secS, reg_rec);
+  final rec = res["rec"]!;
+  return {"export_key": export_key, "rec": rec};
+}
+
+Map<String, Uint8List> login(Uint8List username, Uint8List pwd, Uint8List rec) {
+  final ids = make_ids(username);
+  var res = opaque.CreateCredentialRequest(pwd);
+  final log_pub = res["pub"]!;
+  final log_secU = res["sec"]!;
+
+  res = opaque.CreateCredentialResponse(log_pub, rec, ids, context);
+  final log_resp = res["resp"]!;
+  final log_sk = res["sk"]!;
+  final log_authU = res["authU"]!;
+
+  res = opaque.RecoverCredentials(log_resp, log_secU, context, ids: ids);
+  final log_sk1 = res["sk"]!;
+  final log_authU1 = res["authU"]!;
+  final log_export_key = res["export_key"]!;
+
+  opaque.UserAuth(log_authU, log_authU1);
+  assert(log_sk == log_sk1);
+
+  return {"export_key": log_export_key};
+}
+
+class Credentials {
+  final Uint8List username;
+  final Uint8List password;
+
+  Credentials.from_strings(String username, String password)
+      : username = Uint8List.fromList(username.codeUnits),
+        password = Uint8List.fromList(password.codeUnits);
+}
+
+Credentials get_credentials() {
+  stdout.write("Username: ");
+  String? user = stdin.readLineSync();
+  stdout.write("Password: ");
+  String? pwd = stdin.readLineSync();
+  return Credentials.from_strings(user!, pwd!);
+}
+
 void main(List<String> args) {
-  final opaque = Opaque.init(opaquelib, sodiumlib);
+  print("Registration:");
+  final reg_creds = get_credentials();
 
-  final idU = Uint8List(5);
-  final idS = Uint8List(5);
-  final ids = Ids(idU, idS);
+  final reg = register(reg_creds.username, reg_creds.password);
 
-  final pwd = Uint8List.fromList([64, 65, 66, 67]);
-  final skS = Uint8List(opaque.crypto_scalarmult_SCALARBYTES);
+  print("Login:");
+  final log_creds = get_credentials();
 
-  print("Register Result: " + opaque.Register(pwd, skS, ids).toString());
+  try {
+    final log = login(log_creds.username, log_creds.password, reg["rec"]!);
+
+    assert(reg["export_key"] == log["export_key"]);
+
+    print("authenticated");
+  } on ArgumentError {
+    print("login failed");
+  }
 }
