@@ -592,7 +592,6 @@ class Opaque extends OpaqueInterface {
     final export_key_value = export_key.release();
 
     _check_api_ret(ret);
-    // TODO: maybe change reg_rec -> rec
     return FinalizeRequestResult(reg_rec_value, export_key_value);
   }
 
