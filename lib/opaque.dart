@@ -498,7 +498,7 @@ class Opaque {
 
   Map<String, Uint8List> RecoverCredentials(
       Uint8List resp, Uint8List sec, Uint8List ctx,
-      {OpaqueIds? ids}) {
+      {OpaqueIds? ids = null}) {
     final native_resp = _Uint8ListCPointerInputParameter(resp);
     final native_sec = _Uint8ListCPointerInputParameter(sec);
     final native_ctx = _Uint8ListCPointerInputParameter(ctx);
@@ -605,6 +605,7 @@ class Opaque {
     final export_key_value = export_key.release();
 
     _check_api_ret(ret);
+    // TODO: maybe change reg_rec -> rec
     return {"reg_rec": reg_rec_value, "export_key": export_key_value};
   }
 
