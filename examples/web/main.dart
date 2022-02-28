@@ -1,50 +1,46 @@
 import 'dart:html';
 import 'dart:typed_data';
-import 'package:opaque/js/js_error.dart';
 import 'package:opaque/opaque.js.dart';
 
-final String pwdU = "pwdU";
-final String context = "context";
+final Uint8List context = Uint8List.fromList("context".codeUnits);
 
-OpaqueIds make_ids(String username) {
-  return OpaqueIds(idU: username, idS: "idS");
+final opaque = Opaque.init();
+
+OpaqueIds make_ids(Uint8List username) {
+  return OpaqueIds(username, Uint8List.fromList("idS".codeUnits));
 }
 
-Map<String, Uint8List> register(String username, String pwd) {
+Map<String, Uint8List> register(Uint8List username, Uint8List pwd) {
   final ids = make_ids(username);
-  final reg_req =
-      createRegistrationRequest(CreateRegistrationRequestInputs(pwdU: pwd));
-  final reg_resp = createRegistrationResponse(
-      CreateRegistrationResponseInputs(M: reg_req.M));
-  final fin_req = finalizeRequest(
-      FinalizeRequestInputs(sec: reg_req.sec, pub: reg_resp.pub, ids: ids));
-  final rec = storeUserRecord(
-      StoreUserRecordInputs(sec: reg_resp.sec, rec: fin_req.rec));
+  final reg_req = opaque.CreateRegistrationRequest(pwd);
+  final reg_resp = opaque.CreateRegistrationResponse(reg_req.M);
+  final fin_req = opaque.FinalizeRequest(reg_req.sec, reg_resp.pub, ids);
+  final rec = opaque.StoreUserRecord(reg_resp.sec, fin_req.rec);
   return {"export_key": fin_req.export_key, "rec": rec.rec};
 }
 
-Map<String, Uint8List> login(String username, String pwd, Uint8List rec) {
+Map<String, Uint8List> login(Uint8List username, Uint8List pwd, Uint8List rec) {
   final ids = make_ids(username);
-  final cred_req =
-      createCredentialRequest(CreateCredentialRequestInputs(pwdU: pwd));
-  final cred_resp = createCredentialResponse(CreateCredentialResponseInputs(
-      pub: cred_req.pub, rec: rec, ids: ids, context: context));
-  final rec_cred = recoverCredentials(RecoverCredentialsInputs(
-      resp: cred_resp.resp, sec: cred_req.sec, context: context, ids: ids));
+  final cred_req = opaque.CreateCredentialRequest(pwd);
+  final cred_resp =
+      opaque.CreateCredentialResponse(cred_req.pub, rec, ids, context);
+  final rec_cred = opaque.RecoverCredentials(
+      cred_resp.resp, cred_req.sec, context,
+      ids: ids);
 
-  userAuth(UserAuthInputs(sec: cred_resp.sec, authU: rec_cred.authU));
+  opaque.UserAuth(cred_resp.sec, rec_cred.authU);
   assert(cred_resp.sk.toString() == rec_cred.sk.toString());
 
   return {"export_key": rec_cred.export_key};
 }
 
 class Credentials {
-  final String username;
-  final String password;
+  final Uint8List username;
+  final Uint8List password;
 
   Credentials.from_strings(String username, String password)
-      : username = username,
-        password = password;
+      : username = Uint8List.fromList(username.codeUnits),
+        password = Uint8List.fromList(password.codeUnits);
 }
 
 // Credentials get_credentials() {
@@ -70,7 +66,7 @@ void main(List<String> args) {
     assert(reg["export_key"].toString() == log["export_key"].toString());
 
     print("authenticated");
-  } on JsError {
+  } on OpaqueException {
     print("login failed");
   }
 }

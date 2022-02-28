@@ -1,4 +1,4 @@
-import 'package:opaque/opaque.dart';
+import 'package:opaque/opaque.ffi.dart';
 import 'dart:typed_data';
 import 'dart:ffi' as ffi;
 import 'dart:io' show Directory, stdout, stdin;
@@ -19,43 +19,26 @@ OpaqueIds make_ids(Uint8List username) {
 
 Map<String, Uint8List> register(Uint8List username, Uint8List pwd) {
   final ids = make_ids(username);
-  var res = opaque.CreateRegistrationRequest(pwd);
-  final request = res["request"]!;
-  final secU = res["sec"]!;
-
-  res = opaque.CreateRegistrationResponse(request);
-  final secS = res["sec"]!;
-  final pub = res["pub"]!;
-
-  res = opaque.FinalizeRequest(secU, pub, ids);
-  final reg_rec = res["reg_rec"]!;
-  final export_key = res["export_key"]!;
-
-  res = opaque.StoreUserRecord(secS, reg_rec);
-  final rec = res["rec"]!;
-  return {"export_key": export_key, "rec": rec};
+  final reg_req = opaque.CreateRegistrationRequest(pwd);
+  final reg_resp = opaque.CreateRegistrationResponse(reg_req.M);
+  final fin_req = opaque.FinalizeRequest(reg_req.sec, reg_resp.pub, ids);
+  final usr_rec = opaque.StoreUserRecord(reg_resp.sec, fin_req.rec);
+  return {"export_key": fin_req.export_key, "rec": usr_rec.rec};
 }
 
 Map<String, Uint8List> login(Uint8List username, Uint8List pwd, Uint8List rec) {
   final ids = make_ids(username);
-  var res = opaque.CreateCredentialRequest(pwd);
-  final log_pub = res["pub"]!;
-  final log_secU = res["sec"]!;
+  final cred_req = opaque.CreateCredentialRequest(pwd);
+  final cred_resp =
+      opaque.CreateCredentialResponse(cred_req.pub, rec, ids, context);
+  final rec_cred = opaque.RecoverCredentials(
+      cred_resp.resp, cred_req.sec, context,
+      ids: ids);
 
-  res = opaque.CreateCredentialResponse(log_pub, rec, ids, context);
-  final log_resp = res["resp"]!;
-  final log_sk = res["sk"]!;
-  final log_authU = res["authU"]!;
+  opaque.UserAuth(cred_resp.sec, rec_cred.authU);
+  assert(cred_resp.sk == rec_cred.sk);
 
-  res = opaque.RecoverCredentials(log_resp, log_secU, context, ids: ids);
-  final log_sk1 = res["sk"]!;
-  final log_authU1 = res["authU"]!;
-  final log_export_key = res["export_key"]!;
-
-  opaque.UserAuth(log_authU, log_authU1);
-  assert(log_sk == log_sk1);
-
-  return {"export_key": log_export_key};
+  return {"export_key": rec_cred.export_key};
 }
 
 class Credentials {
@@ -90,7 +73,7 @@ void main(List<String> args) {
     assert(reg["export_key"] == log["export_key"]);
 
     print("authenticated");
-  } on ArgumentError {
+  } on OpaqueException {
     print("login failed");
   }
 }

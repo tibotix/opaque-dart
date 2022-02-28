@@ -14,15 +14,19 @@ A compiled library of both libopaque and libsodium must be available to use thes
 
 ## Usage
 
-To use the libopaque bindings, your first have to initialize an `Opaque` object
+To use the libopaque ffi bindings, your first have to initialize an `Opaque` object
 with both libopaque and libsodium libraries. Please refer to the [libopaque](https://github.com/stef/libopaque) and [libsodium](https://libsodium.gitbook.io/doc/installation) documentations on how to install these libraries properly.
+
+To use the libopaque js bindings, you have to include the libopaque.js script in your html tree and then initialize an `Opaque` object.
+You will get the libopaque.js script here: https://github.com/stef/libopaque/js .
+
 
 ### VM - loading the dynamic library
 In the dart VM, `dart:ffi` is used as a backend to load and interact with the libopaque/libsodium binaries. All you need to do is load such a library and pass it to the `Opaque.init` constructor. This generally looks like this:
 
 ```dart
 import 'dart:ffi';
-import 'package:opaque/opaque.dart';
+import 'package:opaque/opaque.ffi.dart';
 
 // load the dynamic libraries into dart
 final libopaque = DynamicLibrary.open('/path/to/libopaque.XXX'); // or DynamicLibrary.process()
@@ -33,26 +37,24 @@ final opaque = Opaque.init(libopaque, libsodium);
 ```
 
 ### Transpiled JavaScript - loading the JavaScript code
-The usage is quite similar to the VM loading usage, except that you have to load the libopaque.js and libsodium.js source code files instead of the dynamic library binaries. The general usage looks something like this:
+The usage is quite similar to the VM loading usage. You should load the libopaque.js script either in a html file or dynamically in your dart code, and then call `Opaque.init`.
+Make sure to name your script exactly `libopaque.js`. In general this will look something like this:
 
 ```dart
-import 'package:opaque/opaque.dart';
+import 'package:opaque/opaque.js.dart';
 
-final sodiumJS = // somehow load the sodium.js into dart
-final opaqueJS = // somehow load the opaque.js into dart
-
-final opaque = Opaque.init(opaqueJS, sodiumJS);
+final opaque = Opaque.init();
 // using the opaque.* API
 ```
 
 ## API
 
-_Note that all `Opaque.*` API calls will throw an `ArgumentError` if the API call failed_.
+_Note that all `Opaque.*` API calls will throw an `OpaqueException` if the API call failed_.
 
 ### `OpaqueIds`
 The IDs of the peers are passed around as a class object:
 ```dart
-final OpaqueIds ids = OpaqueIds(Uint8List.fromList("user".codeUnits), Uint8List.fromList("server".codeUnits));
+final OpaqueIds ids = OpaqueIds.fromStrings("user", "server");
 ```
 
 ## 1-step registration
@@ -64,8 +66,8 @@ lists). It has the drawback that the password is exposed to the server.
 
 ```dart
 final result = opaque.Register(pwdU, ids, skS: skS);
-final rec = result["rec"]!;
-final export_key = result["export_key"]!;
+final rec = result.rec;
+final export_key = result.export_key;
 ```
  - `pwdU` is the user's password as an `Uint8List` object.
  - `ids` is an `OpaqueIds` struct that contains the IDs of the user and the server.
@@ -80,8 +82,8 @@ following 4 steps:
 
 ```dart
 final result = opaque.CreateRegistrationRequest(pwdU);
-final request = result["request"]!;
-final secU = result["sec"]!;
+final M = result.M!;
+final secU = result.sec;
 ```
 
 - `pwdU` is the user's password as an `Uint8List` object.
@@ -93,11 +95,11 @@ The user should hold on to `secU` securely until step 3 of the registration proc
 
 ```dart
 final result = opaque.CreateRegistrationResponse(request, skS: skS);
-final secS = result["sec"]!;
-final pub = result["pub"]!;
+final secS = result.sec;
+final pub = result.pub;
 ```
 
- - `request` comes from the user running the previous step.
+ - `request` (`M`) comes from the user running the previous step.
  - `skS` is an optional server long-term private-key
 
 The server should hold onto `secS` securely until step 4 of the registration process.
@@ -107,8 +109,8 @@ The server should hold onto `secS` securely until step 4 of the registration pro
 
 ```dart
 final result = opaque.FinalizeRequest(secU, pub, ids);
-final rec0 = result["reg_rec"]!;
-final export_key = result["export_key"]!;
+final rec0 = result.rec;
+final export_key = result.export_key;
 ```
 
  - `secU` contains sensitive data and should be disposed securely after usage in this step.
@@ -124,7 +126,7 @@ final export_key = result["export_key"]!;
 
 ```dart
 final result = opaque.StoreUserRecord(secS, rec0);
-final rec1 = result["rec"]!;
+final rec1 = result.rec;
 ```
 
  - `rec0` comes from the user running the previous step.
@@ -145,8 +147,8 @@ AKE and thus request its credentials in the following 3(+1)-step protocol:
 
 ```dart
 final result = opaque.CreateCredentialRequest(pwdU);
-final pub = result["pub"]!;
-final secU = result["secU"]!;
+final pub = result.pub;
+final secU = result.sec;
 ```
 
  - `pwdU` is the user's password as an `Uint8List` object.
@@ -158,9 +160,9 @@ The user should hold onto `secU` securely until step 3 of the protocol.
 
 ```dart
 final result = opaque.CreateCredentialResponse(pub, rec, ids, context);
-final resp = result["resp"]!;
-final sk = result["sk"]!;
-final authU = result["authU"]!;
+final resp = result.resp;
+final sk = result.sk;
+final sec = result.sec;
 ```
 
  - `pub` comes from the user running the previous step.
@@ -170,7 +172,7 @@ final authU = result["authU"]!;
 
  - `resp` needs to be passed to the user running step 3.
  - `sk` is a shared secret, the result of the AKE.
- - The server should hold onto `authU` securely until the optional step
+ - The server should hold onto `sec` securely until the optional step
    4 of the protocol, if needed. otherwise this value should be
    discarded securely.
 
@@ -178,9 +180,9 @@ final authU = result["authU"]!;
 
 ```dart
 final result = opaque.RecoverCredentials(resp, secU, context, ids: ids);
-final sk = result["sk"]!;
-final authU1 = result["authU"]!;
-final export_key = result["export_key"]!;
+final sk = result.sk;
+final authU = result.authU;
+final export_key = result.export_key;
 ```
 
  - `resp` comes from the server running the previous step.
@@ -188,7 +190,7 @@ final export_key = result["export_key"]!;
  - `context` is a `Uint8List` distinguishing this instantiation of the protocol from others, e.g. "MyApp-v0.2"
 
  - `sk` is a shared secret, the result of the AKE.
- - `authU1` is an authentication tag that can be passed in step 4 for explicit user authentication.
+ - `authU` is an authentication tag that can be passed in step 4 for explicit user authentication.
  - `export_key` can be used to decrypt additional data stored by the server.
 
 ### Step 4 (Optional): The server authenticates the user.
@@ -197,10 +199,10 @@ This step is only needed if there is no encrypted channel setup
 towards the server using the shared secret.
 
 ```dart
-opaque.UserAuth(authU, authU1);
+opaque.UserAuth(sec, authU);
 ```
 
- - `authU` contains sensitive data and should be disposed securely after usage in this step.
+ - `sec` contains sensitive data and should be disposed securely after usage in this step.
  - `authU1` comes from the user running the previous step.
 
 
