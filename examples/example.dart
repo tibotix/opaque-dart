@@ -3,15 +3,15 @@ import 'dart:typed_data';
 import 'dart:ffi' as ffi;
 import 'dart:io' show Directory, stdout, stdin;
 
-var library_path = Directory.current.path + "\\libopaque.dll";
+var opaque_library_path = Directory.current.path + "\\libopaque.dll";
 var sodium_library_path = Directory.current.path + "\\libsodium.dll";
 
-final opaquelib = ffi.DynamicLibrary.open(library_path);
-final sodiumlib = ffi.DynamicLibrary.open(sodium_library_path);
+final libopaque = ffi.DynamicLibrary.open(opaque_library_path);
+final libsodium = ffi.DynamicLibrary.open(sodium_library_path);
+
+final opaque = Opaque.init(libopaque, libsodium);
 
 final Uint8List context = Uint8List.fromList("opaque-dart-v0.0.1".codeUnits);
-
-final opaque = Opaque.init(opaquelib, sodiumlib);
 
 OpaqueIds make_ids(Uint8List username) {
   return OpaqueIds(username, Uint8List.fromList("idS".codeUnits));
