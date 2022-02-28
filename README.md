@@ -47,6 +47,8 @@ final opaque = Opaque.init(opaqueJS, sodiumJS);
 
 ## API
 
+_Note that all `Opaque.*` API calls will throw an `ArgumentError` if the API call failed_.
+
 ### `OpaqueIds`
 The IDs of the peers are passed around as a class object:
 ```dart
