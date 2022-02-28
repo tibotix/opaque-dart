@@ -7,7 +7,7 @@ or you can read the [original paper](https://eprint.iacr.org/2018/163).
 ## Dependencies
 
 These bindings depend on the following:
-  - libopaque
+  - libopaque: https://github.com/stef/libopaque
   - libsodium
 
 A compiled library of both libopaque and libsodium must be available to use these bindings.
