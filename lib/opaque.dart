@@ -1,5 +1,5 @@
-export 'api/opaque_api.dart' hide OpaqueInterface;
+export 'src/api/opaque_api.dart' hide OpaqueInterface;
 
 export ''
-    if (dart.library.ffi) 'ffi/opaque_ffi.dart'
-    if (dart.library.js) 'js/opaque_js.dart';
+    if (dart.library.ffi) 'src/ffi/opaque_ffi.dart'
+    if (dart.library.js) 'src/js/opaque_js.dart';
